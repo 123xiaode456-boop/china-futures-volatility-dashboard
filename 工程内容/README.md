@@ -4,6 +4,8 @@
 
 ## 页面入口
 
+- 公网页面：`https://123xiaode456-boop.github.io/china-futures-volatility-dashboard/`
+- GitHub 仓库：`https://github.com/123xiaode456-boop/china-futures-volatility-dashboard`
 - 本地网页目录：`工程内容/site`
 - 本地数据文件：`工程内容/site/data/volatility.json`
 - 页面文件：`工程内容/site/index.html`
@@ -39,6 +41,8 @@ $node = "C:\Users\janzh\.cache\codex-runtimes\codex-primary-runtime\dependencies
 
 ## 线上部署
 
+当前项目已通过 GitHub Pages 发布到公网。现有公网发布使用 `gh-pages` 分支，根目录包含 `site` 目录中的网页文件。
+
 1. 把整个项目推送到 GitHub 仓库。
 2. 在仓库 Settings -> Pages 中选择 GitHub Actions 作为发布来源。
 3. 打开 Actions，手动运行 `Update futures volatility site`。
@@ -47,6 +51,8 @@ $node = "C:\Users\janzh\.cache\codex-runtimes\codex-primary-runtime\dependencies
 工作流文件：`.github/workflows/update-and-deploy.yml`
 
 工作流每天 UTC 08:45 自动运行一次，约等于北京时间 16:45，用于收盘后更新日频数据。
+
+说明：当前 GitHub CLI token 缺少 `workflow` scope，远程仓库暂未上传 `.github/workflows/update-and-deploy.yml`。为保证公网网页后续能自动更新，已创建 Codex 本地定时任务 `automation-2`，每个工作日 17:00 生成 live 数据并发布到 `gh-pages` 分支。
 
 ## 数据口径
 
