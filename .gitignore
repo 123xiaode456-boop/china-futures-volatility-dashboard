@@ -1,8 +1,0 @@
-.worktrees/
-__pycache__/
-*.pyc
-.pytest_cache/
-node_modules/
-.venv/
-server.log
-server.err.log
