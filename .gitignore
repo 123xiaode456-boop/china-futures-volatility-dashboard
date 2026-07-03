@@ -6,3 +6,5 @@ node_modules/
 .venv/
 server.log
 server.err.log
+server-history.log
+server-history.err.log

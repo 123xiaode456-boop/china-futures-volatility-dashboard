@@ -1,4 +1,5 @@
 import math
+import json
 import statistics
 import sys
 import unittest
@@ -87,6 +88,24 @@ class VolatilityCalculationTests(unittest.TestCase):
         self.assertGreaterEqual(row["vol_percentile"], 0)
         self.assertLessEqual(row["vol_percentile"], 1)
 
+    def test_build_history_series_preserves_full_history_with_rolling_volatility(self):
+        candles = make_candles(90)
+
+        series = volatility.build_history_series(candles)
+
+        self.assertEqual(len(series), 90)
+        self.assertEqual(series[0]["date"], candles[0]["date"])
+        self.assertIsNone(series[0]["change_pct"])
+        self.assertIsNone(series[19]["vol_20"])
+        self.assertIsNotNone(series[20]["vol_20"])
+        self.assertIsNone(series[59]["vol_60"])
+        self.assertIsNotNone(series[60]["vol_60"])
+        self.assertEqual(series[-1]["date"], candles[-1]["date"])
+        self.assertIn("open", series[-1])
+        self.assertIn("high", series[-1])
+        self.assertIn("low", series[-1])
+        self.assertIn("close", series[-1])
+
 
 class SnapshotBuilderTests(unittest.TestCase):
     def test_build_snapshot_contains_metadata_summary_and_sorted_rows(self):
@@ -116,6 +135,26 @@ class SnapshotBuilderTests(unittest.TestCase):
         self.assertEqual(len(snapshot["rows"]), 2)
         self.assertGreaterEqual(snapshot["rows"][0]["vol_20"], snapshot["rows"][1]["vol_20"])
 
+    def test_build_snapshot_contains_contract_selector_and_history_series(self):
+        contracts = [{"exchange": "SHFE", "name": "螺纹钢", "symbol": "RB0"}]
+        candles = make_candles(90)
+
+        snapshot = generate_data.build_snapshot(
+            contracts=contracts,
+            candles_by_symbol={"RB0": candles},
+            mode="sample",
+            source="unit-test",
+        )
+
+        self.assertIn("contracts", snapshot)
+        self.assertIn("series", snapshot)
+        self.assertEqual(snapshot["contracts"][0]["symbol"], "RB0")
+        self.assertEqual(snapshot["contracts"][0]["first_date"], candles[0]["date"])
+        self.assertEqual(snapshot["contracts"][0]["latest_date"], candles[-1]["date"])
+        self.assertEqual(snapshot["contracts"][0]["status"], "正常")
+        self.assertEqual(len(snapshot["series"]["RB0"]), 90)
+        self.assertIsNotNone(snapshot["series"]["RB0"][-1]["vol_20"])
+
     def test_build_snapshot_keeps_failed_contract_as_error_row(self):
         contracts = [{"exchange": "GFEX", "name": "碳酸锂", "symbol": "LC0"}]
 
@@ -130,6 +169,47 @@ class SnapshotBuilderTests(unittest.TestCase):
         self.assertEqual(snapshot["summary"]["errors"], 1)
         self.assertEqual(snapshot["rows"][0]["status"], "获取失败")
         self.assertEqual(snapshot["rows"][0]["symbol"], "LC0")
+
+    def test_write_snapshot_uses_compact_json_for_large_history_payloads(self):
+        output = ROOT / "tests" / "tmp_snapshot.json"
+        snapshot = {"meta": {"mode": "sample"}, "summary": {"total": 1}, "contracts": [], "series": {}}
+
+        try:
+            generate_data.write_snapshot(snapshot, output)
+            content = output.read_text(encoding="utf-8")
+        finally:
+            if output.exists():
+                output.unlink()
+
+        self.assertNotIn("\n", content)
+        self.assertEqual(json.loads(content), snapshot)
+
+    def test_write_site_data_splits_large_series_files(self):
+        output = ROOT / "tests" / "tmp_site" / "volatility.json"
+        snapshot = {
+            "meta": {"mode": "sample"},
+            "summary": {"total": 1},
+            "contracts": [{"exchange": "SHFE", "name": "螺纹钢", "symbol": "RB0"}],
+            "series": {"RB0": [{"date": "2026-01-01", "close": 100}]},
+            "rows": [{"symbol": "RB0", "vol_20": 0.2}],
+        }
+
+        try:
+            generate_data.write_site_data(snapshot, output)
+            index = json.loads(output.read_text(encoding="utf-8"))
+            series = json.loads((output.parent / "series" / "RB0.json").read_text(encoding="utf-8"))
+        finally:
+            if output.parent.exists():
+                for path in sorted(output.parent.rglob("*"), reverse=True):
+                    if path.is_file():
+                        path.unlink()
+                    elif path.is_dir():
+                        path.rmdir()
+
+        self.assertNotIn("series", index)
+        self.assertEqual(index["contracts"][0]["symbol"], "RB0")
+        self.assertEqual(series["symbol"], "RB0")
+        self.assertEqual(series["series"][0]["close"], 100)
 
 
 if __name__ == "__main__":

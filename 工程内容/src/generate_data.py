@@ -8,10 +8,10 @@ from pathlib import Path
 
 try:
     from .contracts import CONTRACTS
-    from .volatility import build_metric_row
+    from .volatility import build_history_series, build_metric_row
 except ImportError:
     from contracts import CONTRACTS
-    from volatility import build_metric_row
+    from volatility import build_history_series, build_metric_row
 
 
 def _stable_number(text, modulo):
@@ -122,6 +122,8 @@ def build_error_row(contract, message):
 
 def build_snapshot(contracts, candles_by_symbol, mode, source):
     rows = []
+    contract_options = []
+    series_by_symbol = {}
     errors = []
     for contract in contracts:
         symbol = contract["symbol"]
@@ -129,19 +131,52 @@ def build_snapshot(contracts, candles_by_symbol, mode, source):
         if not candles:
             message = "no candles available"
             rows.append(build_error_row(contract, message))
+            contract_options.append(
+                {
+                    "exchange": contract["exchange"],
+                    "name": contract["name"],
+                    "symbol": symbol,
+                    "first_date": None,
+                    "latest_date": None,
+                    "status": "获取失败",
+                }
+            )
+            series_by_symbol[symbol] = []
             errors.append({"symbol": symbol, "message": message})
             continue
         try:
-            rows.append(
-                build_metric_row(
-                    exchange=contract["exchange"],
-                    name=contract["name"],
-                    symbol=symbol,
-                    candles=candles,
-                )
+            metric_row = build_metric_row(
+                exchange=contract["exchange"],
+                name=contract["name"],
+                symbol=symbol,
+                candles=candles,
+            )
+            history = build_history_series(candles)
+            rows.append(metric_row)
+            series_by_symbol[symbol] = history
+            contract_options.append(
+                {
+                    "exchange": contract["exchange"],
+                    "name": contract["name"],
+                    "symbol": symbol,
+                    "first_date": history[0]["date"] if history else None,
+                    "latest_date": history[-1]["date"] if history else None,
+                    "status": metric_row["status"],
+                }
             )
         except Exception as exc:
             rows.append(build_error_row(contract, str(exc)))
+            contract_options.append(
+                {
+                    "exchange": contract["exchange"],
+                    "name": contract["name"],
+                    "symbol": symbol,
+                    "first_date": None,
+                    "latest_date": None,
+                    "status": "获取失败",
+                }
+            )
+            series_by_symbol[symbol] = []
             errors.append({"symbol": symbol, "message": str(exc)})
 
     rows.sort(key=lambda row: row["vol_20"] if row["vol_20"] is not None else -1, reverse=True)
@@ -164,6 +199,8 @@ def build_snapshot(contracts, candles_by_symbol, mode, source):
             "insufficient": insufficient,
             "errors": failed,
         },
+        "contracts": contract_options,
+        "series": series_by_symbol,
         "rows": rows,
     }
 
@@ -189,7 +226,20 @@ def collect_candles(contracts, mode, csv_dir=None):
 def write_snapshot(snapshot, output):
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return path
+
+
+def write_site_data(snapshot, output):
+    path = Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    series_dir = path.parent / "series"
+    series_dir.mkdir(parents=True, exist_ok=True)
+
+    index_snapshot = {key: value for key, value in snapshot.items() if key != "series"}
+    write_snapshot(index_snapshot, path)
+    for symbol, series in snapshot.get("series", {}).items():
+        write_snapshot({"symbol": symbol, "series": series}, series_dir / f"{symbol}.json")
     return path
 
 
@@ -209,7 +259,7 @@ def main(argv=None):
     )
     for symbol, message in fetch_errors.items():
         snapshot["meta"]["errors"].append({"symbol": symbol, "message": message})
-    path = write_snapshot(snapshot, args.output)
+    path = write_site_data(snapshot, args.output)
     print(f"Wrote {len(snapshot['rows'])} rows to {path}")
 
 

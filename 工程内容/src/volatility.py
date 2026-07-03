@@ -126,3 +126,32 @@ def build_metric_row(exchange, name, symbol, candles):
         "vol_percentile": _round_optional(vol_percentile),
         "status": status,
     }
+
+
+def build_history_series(candles):
+    valid = _valid_candles(candles)
+    closes = [item["close"] for item in valid]
+    returns = log_returns(closes)
+    series = []
+    for index, candle in enumerate(valid):
+        previous_close = valid[index - 1]["close"] if index > 0 else None
+        returns_to_date = returns[:index]
+        vol_20 = annualized_volatility(returns_to_date[-20:], 20)
+        vol_60 = annualized_volatility(returns_to_date[-60:], 60)
+        series.append(
+            {
+                "date": candle["date"],
+                "open": _round_optional(candle.get("open"), 4),
+                "high": _round_optional(candle.get("high"), 4),
+                "low": _round_optional(candle.get("low"), 4),
+                "close": _round_optional(candle.get("close"), 4),
+                "volume": _round_optional(candle.get("volume"), 4),
+                "change_pct": _round_optional(daily_change(candle.get("close"), previous_close)),
+                "amplitude_pct": _round_optional(
+                    amplitude(candle.get("high"), candle.get("low"), previous_close)
+                ),
+                "vol_20": _round_optional(vol_20),
+                "vol_60": _round_optional(vol_60),
+            }
+        )
+    return series

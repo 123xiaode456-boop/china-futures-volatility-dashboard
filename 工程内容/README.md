@@ -1,13 +1,14 @@
 # 国内商品期货波动率网页
 
-这是一个静态网页工程，用于查看国内商品期货主力或连续合约的日频波动率。
+这是一个静态网页工程，用于搜索国内商品期货主力或连续合约，并查看单个商品从上市以来到最新日期的历史 K 线、20 日年化波动率和 60 日年化波动率。
 
 ## 页面入口
 
 - 公网页面：`https://123xiaode456-boop.github.io/china-futures-volatility-dashboard/`
 - GitHub 仓库：`https://github.com/123xiaode456-boop/china-futures-volatility-dashboard`
 - 本地网页目录：`工程内容/site`
-- 本地数据文件：`工程内容/site/data/volatility.json`
+- 本地索引文件：`工程内容/site/data/volatility.json`
+- 单商品历史数据：`工程内容/site/data/series/*.json`
 - 页面文件：`工程内容/site/index.html`
 
 ## 本地生成样例数据
@@ -62,6 +63,14 @@ $node = "C:\Users\janzh\.cache\codex-runtimes\codex-primary-runtime\dependencies
 - 当日涨跌幅：`close_t / close_t-1 - 1`
 - 当日振幅：`(high_t - low_t) / close_t-1`
 - 波动率分位：当前 20 日波动率在最近一年滚动 20 日波动率序列中的百分位
+
+## 页面模式
+
+- 首页不再铺开 60 个商品的具体波动率表格。
+- 顶部提供商品搜索框和商品下拉框，支持按中文名、合约代码和交易所搜索。
+- 选择商品后，页面加载该商品独立历史文件并绘制价格 K 线和 20日/60日波动率曲线。
+- 日期区间默认覆盖该商品数据源返回的第一天到最新日期，也可以手动选择开始日期和结束日期。
+- 快捷按钮支持近 3 个月、近 6 个月、近 1 年和全部。
 
 ## 数据源
 
